@@ -1326,9 +1326,19 @@ def cmd_list(args: Any | None = None) -> None:
         for name, version, description, source, _dir, key in entries
     ]
 
-    if getattr(args, "json", False):
+    try:
+        from hermes_cli.subcommands._shared import resolve_output_format, to_toon
+        fmt = resolve_output_format(args)
+    except Exception:
+        fmt = "json" if getattr(args, "json", False) else "text"
+
+    if fmt in ("json", "toon"):
         keys = ("name", "status", "version", "description", "source")
-        print(json.dumps([dict(zip(keys, row)) for row in rows], indent=2))
+        data = [dict(zip(keys, row)) for row in rows]
+        if fmt == "json":
+            print(json.dumps(data, indent=2))
+        else:
+            print(to_toon(data))
         return
 
     if getattr(args, "plain", False):
@@ -1483,7 +1493,7 @@ def cmd_toggle() -> None:
     categories = _provider_categories()
 
     if not sys.stdin.isatty():
-        console.print("[dim]Interactive mode requires a terminal.[/dim]")
+        cmd_list()
         return
     try:
         import curses

@@ -750,7 +750,8 @@ def _print_tier1_advisory(skill_dir, console) -> None:
 # --- list / check / update / audit ---
 
 def do_list(source_filter: str = "all", enabled_only: bool = False,
-            console: Optional[Console] = None) -> None:
+            console: Optional[Console] = None,
+            output_format: str = "text") -> None:
     """List installed skills (hub / builtin / local). Enabled state comes from the active
     profile's config — ``-p`` swaps HERMES_HOME at process start, so no profile flag here."""
     from tools.skills_hub import HubLockFile, ensure_hub_dirs
@@ -769,6 +770,7 @@ def do_list(source_filter: str = "all", enabled_only: bool = False,
 
     counts = {"hub": 0, "builtin": 0, "local": 0}
     enabled_count = disabled_count = 0
+    skill_rows = []
     for skill in sorted(all_skills, key=lambda s: (s.get("category") or "", s["name"])):
         name = skill["name"]
         hub_entry = hub_installed.get(name)
@@ -783,9 +785,26 @@ def do_list(source_filter: str = "all", enabled_only: bool = False,
         counts[source_type] += 1
         enabled_count += is_enabled
         disabled_count += not is_enabled
+        status = "enabled" if is_enabled else "disabled"
+        skill_rows.append({
+            "name": name,
+            "category": skill.get("category") or "",
+            "source": source_display,
+            "trust": trust,
+            "status": status,
+        })
         table.add_row(name, skill.get("category", ""), source_display,
                       _trust_cell(trust, source_display),
                       "[bold green]enabled[/]" if is_enabled else "[dim red]disabled[/]")
+
+    if output_format == "json":
+        import json
+        print(json.dumps(skill_rows, indent=2))
+        return
+    if output_format == "toon":
+        from hermes_cli.subcommands._shared import to_toon
+        print(to_toon(skill_rows))
+        return
 
     c.print(table)
     tail = (f"{enabled_count} enabled shown" if enabled_only
@@ -1301,6 +1320,14 @@ def _tap_cli(args) -> None:
     do_tap(tap_action, repo=getattr(args, "repo", "") or getattr(args, "name", ""))
 
 
+def _resolve_format(a) -> str:
+    try:
+        from hermes_cli.subcommands._shared import resolve_output_format
+        return resolve_output_format(a)
+    except Exception:
+        return "text"
+
+
 # `hermes skills <action>` -> handler(args). Lambdas late-bind the do_* names so
 # tests that patch("hermes_cli.skills_hub.do_install") still intercept.
 _CLI_ACTIONS = {
@@ -1311,8 +1338,9 @@ _CLI_ACTIONS = {
                                     skip_confirm=getattr(a, "yes", False),
                                     name_override=getattr(a, "name", "") or ""),
     "inspect": lambda a: do_inspect(a.identifier),
-    "list": lambda a: do_list(source_filter=a.source,
-                              enabled_only=getattr(a, "enabled_only", False)),
+    "list": lambda a: do_list(source_filter=getattr(a, "source", "all"),
+                              enabled_only=getattr(a, "enabled_only", False),
+                              output_format=_resolve_format(a)),
     "check": lambda a: do_check(name=getattr(a, "name", None)),
     "update": lambda a: do_update(name=getattr(a, "name", None), force=getattr(a, "force", False)),
     "audit": lambda a: do_audit(name=getattr(a, "name", None), deep=getattr(a, "deep", False)),
@@ -1333,7 +1361,9 @@ _CLI_ACTIONS = {
 
 def skills_command(args) -> None:
     """Router for `hermes skills <subcommand>` — called from hermes_cli/main.py."""
-    handler = _CLI_ACTIONS.get(getattr(args, "skills_action", None))
+    action = getattr(args, "skills_action", None) or "list"
+    args.skills_action = action
+    handler = _CLI_ACTIONS.get(action)
     if handler is None:
         _console.print("Usage: hermes skills [browse|search|install|inspect|list|list-modified|diff|check|update|audit|uninstall|reset|opt-out|opt-in|publish|snapshot|tap]\n")
         _console.print("Run 'hermes skills <command> --help' for details.\n")

@@ -11,6 +11,8 @@ from typing import Any, Dict
 DEFAULT_MAX_BYTES = 50_000       # terminal_tool.MAX_OUTPUT_CHARS
 DEFAULT_MAX_LINES = 2000         # file_operations.MAX_LINES
 DEFAULT_MAX_LINE_LENGTH = 2000   # file_operations.MAX_LINE_LENGTH
+DEFAULT_OUTPUT_FORMAT = "text"
+VALID_OUTPUT_FORMATS = ("text", "json", "toon")
 _cached_limits: dict | None = None  # process-lifetime: no config.yaml re-read per tool call
 
 
@@ -27,8 +29,8 @@ def _coerce_positive_int(value: Any, default: int) -> int:
     return _coerce_int(value, default, 1)  # positive int, or ``default`` on any issue
 
 
-def get_tool_output_limits() -> Dict[str, int]:
-    """Resolved ``{max_bytes, max_lines, max_line_length}``; never raises. Cached for the
+def get_tool_output_limits() -> Dict[str, Any]:
+    """Resolved ``{max_bytes, max_lines, max_line_length, format}``; never raises. Cached for the
     process — ``_reset_tool_output_limits_cache()`` forces a fresh read."""
     global _cached_limits
     if _cached_limits is not None:
@@ -41,11 +43,15 @@ def get_tool_output_limits() -> Dict[str, int]:
         section = None
     if not isinstance(section, dict):
         section = {}
+    raw_fmt = str(section.get("format") or DEFAULT_OUTPUT_FORMAT).lower().strip()
+    fmt = raw_fmt if raw_fmt in VALID_OUTPUT_FORMATS else DEFAULT_OUTPUT_FORMAT
     _cached_limits = {
         "max_bytes": _coerce_positive_int(section.get("max_bytes"), DEFAULT_MAX_BYTES),
         "max_lines": _coerce_positive_int(section.get("max_lines"), DEFAULT_MAX_LINES),
         "max_line_length": _coerce_positive_int(
-            section.get("max_line_length"), DEFAULT_MAX_LINE_LENGTH)}
+            section.get("max_line_length"), DEFAULT_MAX_LINE_LENGTH),
+        "format": fmt,
+    }
     return _cached_limits
 
 
@@ -58,3 +64,4 @@ def _reset_tool_output_limits_cache() -> None:
 def get_max_bytes() -> int: return get_tool_output_limits()["max_bytes"]
 def get_max_lines() -> int: return get_tool_output_limits()["max_lines"]
 def get_max_line_length() -> int: return get_tool_output_limits()["max_line_length"]
+def get_output_format() -> str: return get_tool_output_limits()["format"]

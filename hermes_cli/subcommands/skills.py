@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from hermes_cli.subcommands._shared import add_json_flag, add_yes_flag
+from hermes_cli.subcommands._shared import add_format_flag, add_json_flag, add_yes_flag
 
 
 def _flag(parser, *names, help, **kw):
@@ -71,6 +71,8 @@ def build_skills_parser(subparsers, *, cmd_skills: Callable) -> None:
     _flag(skills_list, "--enabled-only",
         help="Hide disabled skills. Use with -p <profile> to see exactly "
         "which skills will load for that profile.")
+    add_format_flag(skills_list)
+    add_json_flag(skills_list, "Output JSON instead of a table (shorthand for --format json)")
 
     skills_check = skills_subparsers.add_parser(
         "check", help="Check installed hub skills for updates")

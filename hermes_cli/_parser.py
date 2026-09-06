@@ -6,7 +6,10 @@ gateway, sessions, …) is built by ``hermes_cli/subcommands/<group>.py`` and wi
 """
 
 import argparse
+import difflib
 from functools import lru_cache
+import re
+import sys
 
 # `--profile` / `-p` is consumed by ``main._apply_profile_override`` before argparse runs
 # (it sets ``HERMES_HOME`` and strips itself from ``sys.argv``), so it isn't on the parser.
@@ -275,6 +278,51 @@ def _build_chat_parser(subparsers) -> argparse.ArgumentParser:
     return chat_parser
 
 
+class HermesArgumentParser(argparse.ArgumentParser):
+    """Top-level ArgumentParser with Did-You-Mean typo correction."""
+
+    def error(self, message: str) -> None:
+        m = re.search(r"argument command: invalid choice: '([^']+)'", message)
+        if m and self.prog == "hermes":
+            token = m.group(1)
+            choices: list[str] = []
+            for action in self._actions:
+                if isinstance(action, argparse._SubParsersAction):
+                    choices.extend(action.choices.keys())
+            matches = difflib.get_close_matches(token, choices, n=3, cutoff=0.5)
+            if matches:
+                sys.stderr.write(
+                    f"{self.prog}: error: unknown command '{token}'. Did you mean: {', '.join(matches)}?\n"
+                    f"Run '{self.prog} --help' for available commands.\n"
+                )
+            else:
+                sys.stderr.write(
+                    f"{self.prog}: error: unknown command '{token}'.\n"
+                    f"Run '{self.prog} --help' for available commands.\n"
+                )
+            self.exit(2)
+
+        if message.startswith("unrecognized arguments:"):
+            unrec = message.split(":", 1)[1].strip()
+            tokens = unrec.split()
+            valid_options = [opt for a in self._actions for opt in a.option_strings]
+            for a in self._actions:
+                if isinstance(action_sub := a, argparse._SubParsersAction):
+                    for sub in action_sub.choices.values():
+                        valid_options.extend([opt for sa in sub._actions for opt in sa.option_strings])
+            suggestions: list[str] = []
+            for t in tokens:
+                if t.startswith("-"):
+                    hits = difflib.get_close_matches(t, valid_options, n=1, cutoff=0.6)
+                    if hits:
+                        suggestions.append(f"{t} -> {hits[0]}")
+            hint = f" (did you mean: {', '.join(suggestions)})" if suggestions else ""
+            self.print_usage(sys.stderr)
+            self.exit(2, f"{self.prog}: error: unrecognized arguments: {unrec}{hint}\n")
+
+        super().error(message)
+
+
 def build_top_level_parser():
     """Build the top-level parser, the subparsers action, and the ``chat`` subparser.
 
@@ -282,7 +330,7 @@ def build_top_level_parser():
     ``chat_parser.set_defaults(func= cmd_chat)`` and registers further subparsers via
     ``subparsers.add_parser(...)``.
     """
-    parser = argparse.ArgumentParser(
+    parser = HermesArgumentParser(
         prog="hermes", description="Hermes Agent - AI assistant with tool-calling capabilities",
         formatter_class=argparse.RawDescriptionHelpFormatter, epilog=_EPILOGUE)
     _add_top_level_flags(parser)

@@ -63,6 +63,7 @@ class TestOverrides:
             "max_bytes": 100_000,
             "max_lines": 5000,
             "max_line_length": 4096,
+            "format": "text",
         }
 
 
@@ -118,6 +119,7 @@ class TestDefaultConfigHasSection:
         assert section["max_bytes"] == tol.DEFAULT_MAX_BYTES
         assert section["max_lines"] == tol.DEFAULT_MAX_LINES
         assert section["max_line_length"] == tol.DEFAULT_MAX_LINE_LENGTH
+        assert section["format"] == tol.DEFAULT_OUTPUT_FORMAT
 
 
 class TestIntegrationReadPagination:

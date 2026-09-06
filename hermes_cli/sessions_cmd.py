@@ -250,7 +250,9 @@ def _default_exclude(args):
 
 def _cmd_list(db, args):
     from hermes_state_sessions import workspace_key as _ws_key
-    sessions = db.list_sessions_rich(source=args.source, exclude_sources=_default_exclude(args), limit=args.limit)
+    source = getattr(args, "source", None)
+    limit = getattr(args, "limit", 20)
+    sessions = db.list_sessions_rich(source=source, exclude_sources=_default_exclude(args), limit=limit)
 
     # Workspace filter: workspace key (git repo root, else cwd) — path substring or exact basename.
     _ws_filter = (getattr(args, "workspace", None) or "").strip()
@@ -260,6 +262,32 @@ def _cmd_list(db, args):
         sessions = [
             s for s, key in keyed if key and (_needle in key or _needle == os.path.basename(key.rstrip("/\\")))
         ]
+
+    try:
+        from hermes_cli.subcommands._shared import resolve_output_format, to_toon
+        fmt = resolve_output_format(args)
+    except Exception:
+        fmt = "text"
+
+    if fmt in ("json", "toon"):
+        items = []
+        for s in sessions:
+            ws = _ws_key(s) or ""
+            items.append({
+                "id": s.get("id") or "",
+                "title": s.get("title") or "",
+                "preview": s.get("preview") or "",
+                "workspace": ws,
+                "last_active": s.get("last_active") or "",
+                "source": s.get("source") or "",
+            })
+        if fmt == "json":
+            import json
+            print(json.dumps(items, indent=2))
+        else:
+            print(to_toon(items))
+        return
+
     if not sessions:
         print("No sessions found.")
         return
@@ -948,7 +976,7 @@ _DB_HANDLERS = {
 
 
 def cmd_sessions(args, sessions_parser=None):
-    action = args.sessions_action
+    action = getattr(args, "sessions_action", None) or "list"
     pre = _PRE_DB_HANDLERS.get(action)
     if pre is not None:
         return pre(args)
@@ -961,7 +989,8 @@ def cmd_sessions(args, sessions_parser=None):
     try:
         handler = _DB_HANDLERS.get(action)
         if handler is None:
-            sessions_parser.print_help()
+            if sessions_parser:
+                sessions_parser.print_help()
             return
         return handler(db, args)
     finally:

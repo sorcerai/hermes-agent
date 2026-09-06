@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 
-from hermes_cli.subcommands._shared import add_json_flag, add_yes_flag
+from hermes_cli.subcommands._shared import add_format_flag, add_json_flag, add_yes_flag
 
 
 def _flag(parser, *names, help, **kw):
@@ -25,6 +25,8 @@ def build_sessions_parser(subparsers, *, cmd_sessions: Callable) -> None:
     sessions_list.add_argument("--workspace", metavar="NEEDLE",
         help="Only sessions in one workspace: a git repo root or project dir "
         "(matched by path substring or basename).")
+    add_format_flag(sessions_list)
+    add_json_flag(sessions_list, "Print machine-readable JSON (shorthand for --format json)")
 
     _filter_args = (
         ("--newer-than", dict(metavar="AGE", help="Only match sessions active within the last AGE "

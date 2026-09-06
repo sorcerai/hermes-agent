@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from hermes_cli.subcommands._shared import add_json_flag
+from hermes_cli.subcommands._shared import add_format_flag, add_json_flag
 
 
 def build_plugins_parser(subparsers, *, cmd_plugins: Callable) -> None:
@@ -67,7 +67,8 @@ def build_plugins_parser(subparsers, *, cmd_plugins: Callable) -> None:
     plugins_list.add_argument(
         "--plain", action="store_true",
         help="Print compact plain-text output instead of a Rich table")
-    add_json_flag(plugins_list, "Print machine-readable JSON")
+    add_format_flag(plugins_list)
+    add_json_flag(plugins_list, "Print machine-readable JSON (shorthand for --format json)")
 
     plugins_enable = plugins_subparsers.add_parser("enable", help="Enable a disabled plugin")
     plugins_enable.add_argument("name", help="Plugin name to enable")
